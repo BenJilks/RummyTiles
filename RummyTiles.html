@@ -6,9 +6,15 @@
 		<script src="script.js"></script>
 	</header>
 
-	<body>
-		<div class="tile"><text>6</text></div>
+	<body onmousemove="drag(event)" onmouseup="end_drag()">
 	</body>
+	
+	<script>
+		for (var i = 0; i < 10; i++)
+		{
+			create_tile();
+		}
+	</script>
 
 </html>
 
