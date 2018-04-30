@@ -17,23 +17,26 @@ function create_tile()
 	tile.py = 10;
 	tile.left = null;
 	tile.right = null;
+	tile.number = Math.floor(Math.random() * 13)+1;
+	tile.colour = colours[Math.floor(Math.random() * colours.length)];
 	
 	var number = document.createElement("text");
-	number.style = "color:" + colours[Math.floor(Math.random() * colours.length)];
-	number.innerHTML = Math.floor(Math.random() * 13)+1;
+	number.style = "color:" + tile.colour;
+	number.innerHTML = tile.number;
 	tile.appendChild(number);
 	document.body.appendChild(tile);
     tiles.push(tile);
 	curr_pos += 80;
 }
 
-function create_group(x, y, width)
+function create_group(x, y, width, valid)
 {
     var group = document.createElement("div");
     group.className = "group";
     group.style.left = (x-10) + "px";
     group.style.top = (y-10) + "px";
     group.style.width = (width+80) + "px";
+    group.style.backgroundColor = valid ? "green" : "red";
     document.body.appendChild(group);
     html_groups.push(group);
 }
@@ -173,8 +176,52 @@ function update_groups()
 		var group = groups[i];
 		var first = group[0];
 		var last = group[group.length-1];
-		create_group(first.px, first.py, last.px - first.px);
+		var valid = is_group_valid(group);
+		create_group(first.px, first.py, last.px - first.px, valid);
 	}
+}
+
+function is_group_valid(group)
+{
+	if (group.length <= 2)
+		return false;
+	
+	var follow_num = true;
+	var same_colour = true;
+	var same_number = true;
+	var diffrent_colours = true;
+	
+	var counter = null;
+	var colour = null;
+	var number = null;
+	var colours = [];
+	for (var i = 0; i < group.length; i++)
+	{
+		var tile = group[i];
+		if (counter == null)
+			counter = tile.number;
+		else
+			if (tile.number != ++counter)
+				follow_num = false;
+		
+		if (colour == null)
+			colour = tile.colour;
+		else
+			if (tile.colour != colour)
+				same_colour = false;
+		
+		if (number == null)
+			number = tile.number;
+		else
+			if (tile.number != number)
+				same_number = false;
+		
+		if (colours.indexOf(tile.colour) != -1)
+			diffrent_colours = false;
+		colours.push(tile.colour);
+	}
+	
+	return (follow_num && same_colour) || (same_number && diffrent_colours);
 }
 
 function scan_left(tile)
