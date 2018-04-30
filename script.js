@@ -3,7 +3,9 @@ var curr_tile = null;
 var curr_pos = 10;
 var colours = ["red", "blue", "orange", "green"];
 var tiles = [];
+var in_group = [];
 var groups = [];
+var html_groups = [];
 
 function create_tile()
 {
@@ -11,6 +13,10 @@ function create_tile()
 	tile.className = "tile";
 	tile.style = "left:" + curr_pos + "px;top:10px";
 	tile.onmousedown = function() {start_drag(tile)};
+	tile.px = curr_pos;
+	tile.py = 10;
+	tile.left = null;
+	tile.right = null;
 	
 	var number = document.createElement("text");
 	number.style = "color:" + colours[Math.floor(Math.random() * colours.length)];
@@ -21,11 +27,25 @@ function create_tile()
 	curr_pos += 80;
 }
 
-function create_group()
+function create_group(x, y, width)
 {
     var group = document.createElement("div");
     group.className = "group";
-    return group;
+    group.style.left = (x-10) + "px";
+    group.style.top = (y-10) + "px";
+    group.style.width = (width+80) + "px";
+    document.body.appendChild(group);
+    html_groups.push(group);
+}
+
+function clear_groups()
+{
+	for (var i = 0; i < html_groups.length; i++)
+	{
+		var group = html_groups[i];
+		document.body.removeChild(group);
+	}
+	html_groups = [];
 }
 
 function start_drag(tile)
@@ -69,6 +89,7 @@ function drag(event, tile)
         var px = Math.round((curr_tile.px - 10) / 80) * 80 + 10;
         if (!snap_pos(px, 10))
             snap_tiles();
+        update_groups();
 	}
 }
 
@@ -100,45 +121,80 @@ function snap_tiles()
 
 function snap_right(tile)
 {
-    var group = find_group(tile);
-    if (group == null)
-        groups.push([create_group(), [tile, curr_tile]]);
-    else if (group.indexOf(curr_tile) == -1)
-        group.push(curr_tile);
+	tile.right = curr_tile;
+	curr_tile.left = tile;
 }
 
 function snap_left(tile)
 {
-    var group = find_group(tile);
-    if (group == null)
-        groups.push([create_group(), [curr_tile, tile]]);
-    else if (group.indexOf(curr_tile) == -1)
-        group.unshift(curr_tile);
+    tile.left = curr_tile;
+	curr_tile.right = tile;
 }
 
 function unsnap()
 {
-    var group = find_group(curr_tile);
-    if (group != null)
+    if (curr_tile.left != null)
     {
-        group.splice(group.indexOf(curr_tile), 1);
-        if (group.length <= 0)
-            groups.splice(
+    	curr_tile.left.right = null;
+    	curr_tile.left = null;
+    }
+    
+    if (curr_tile.right != null)
+    {
+    	curr_tile.right.left = null;
+    	curr_tile.right = null;
     }
 }
 
-function find_group(tile)
+function update_groups()
 {
-    for (var i = 0; i < groups.length; i++)
-    {
-        var group = groups[i];
-        if (group.indexOf(tile) != -1)
-            return group;
-    }
-    return null;
+	clear_groups();
+	in_group = [];
+	groups = [];
+	for (var i = 0; i < tiles.length; i++)
+	{
+		var tile = tiles[i];
+		if (in_group.indexOf(tile) == -1)
+		{
+			var group = [tile];
+			if (tile.left != null)
+				group = scan_left(tile.left).concat(group);
+			if (tile.right != null)
+				group = group.concat(scan_right(tile.right));
+
+			in_group.push(tile);
+			if (group.length > 1)
+				groups.push(group);
+		}
+	}
+	
+	for (var i = 0; i < groups.length; i++)
+	{
+		var group = groups[i];
+		var first = group[0];
+		var last = group[group.length-1];
+		create_group(first.px, first.py, last.px - first.px);
+	}
+}
+
+function scan_left(tile)
+{
+	in_group.push(tile);
+	if (tile.left != null)
+		return scan_left(tile.left).concat([tile]);
+	return [tile];
+}
+
+function scan_right(tile)
+{
+	in_group.push(tile);
+	if (tile.right != null)
+		return [tile].concat(scan_right(tile.right));
+	return [tile];
 }
 
 function end_drag()
 {
 	curr_tile = null;
 }
+
