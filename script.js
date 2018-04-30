@@ -6,6 +6,7 @@ var tiles = [];
 var in_group = [];
 var groups = [];
 var html_groups = [];
+var slots = [];
 
 function create_tile()
 {
@@ -89,8 +90,11 @@ function drag(event, tile)
         curr_tile.py = event.clientY-50;
         update_tile();
         
-        var px = Math.round((curr_tile.px - 10) / 80) * 80 + 10;
-        if (!snap_pos(px, 10))
+        var slot = Math.round((curr_tile.px - 10) / 80);
+        var px = slot * 80 + 10;
+        
+        
+        if (!snap_pos(px, 10) && curr_tile.py > 100)
             snap_tiles();
         update_groups();
 	}
@@ -104,16 +108,22 @@ function snap_tiles()
         var tile = tiles[i];
         if (tile != curr_tile)
         {
-            if (snap_pos(tile.px + 70, tile.py))
-            {
-                snap_right(tile);
-                did_snap = true;
+        	if (tile.right == null || tile.right == curr_tile)
+        	{
+            	if (snap_pos(tile.px + 70, tile.py))
+            	{
+            	    snap_right(tile);
+            	    did_snap = true;
+            	}
             }
             
-            if (snap_pos(tile.px - 70, tile.py))
-            {
-                snap_left(tile);
-                did_snap = true;
+            if (tile.left == null || tile.left == curr_tile)
+        	{
+           		if (snap_pos(tile.px - 70, tile.py))
+            	{
+            	    snap_left(tile);
+            	    did_snap = true;
+            	}
             }
         }
     }
