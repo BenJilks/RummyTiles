@@ -354,6 +354,7 @@ function end_drag()
             curr_tile.py = 10;
             slots[slot] = curr_tile;
             update_tile(curr_tile);
+            update_slot_scroll();
         }
         curr_tile = null;
     }
