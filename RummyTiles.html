@@ -9,10 +9,17 @@
 	<body onmousemove="drag(event)" onmouseup="end_drag()">
 		<div class="topback"></div>
 		<div class="topbar"></div>
+		<div class="more" id="left" onmouseover="scroll_left()" onmouseout="stop_scroll()" style="display:none">
+            <text>&lt</text>
+		</div>
+		<div class="more" id="right" onmouseover="scroll_right()" onmouseout="stop_scroll()" style="left:100%;margin-left:-20px;display:none">
+            <text>&gt</text>
+		</div>
+		<button class="next" onclick="next_turn(this)" id="next">Pickup</button>
 	</body>
 	
 	<script>
-		for (var i = 0; i < 20; i++)
+		for (var i = 0; i < 10; i++)
 		{
 			create_tile();
 		}

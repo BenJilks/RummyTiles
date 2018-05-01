@@ -1,20 +1,25 @@
 
 var curr_tile = null;
-var curr_pos = 10;
 var colours = ["red", "blue", "orange", "green"];
 var tiles = [];
 var in_group = [];
 var groups = [];
 var html_groups = [];
 var slots = [];
+var slot_offest = 10;
+var intervals = [];
+var last_board = [];
 
 function create_tile()
 {
 	var tile = document.createElement("div");
+    var slot = find_slot();
+    var pos = slot * 80 + slot_offest;
+    
 	tile.className = "tile";
-	tile.style = "left:" + curr_pos + "px;top:10px";
+	tile.style = "left:" + pos + "px;top:10px";
 	tile.onmousedown = function() {start_drag(tile)};
-	tile.px = curr_pos;
+	tile.px = pos;
 	tile.py = 10;
 	tile.left = null;
 	tile.right = null;
@@ -27,17 +32,65 @@ function create_tile()
 	tile.appendChild(number);
 	document.body.appendChild(tile);
     tiles.push(tile);
-	curr_pos += 80;
+    slots[slot] = tile;
 }
 
-function create_group(x, y, width, valid)
+function update_slots()
+{
+    for (var i = 0; i < slots.length; i++)
+    {
+        var tile = slots[i];
+        if (tile != null)
+        {
+            tile.px = i * 80 + slot_offest;
+            update_tile(tile);
+        }
+    }
+    update_slot_scroll();
+}
+
+function scroll_right()
+{
+    var i = setInterval(function() 
+    {
+        slot_offest -= 10;
+        update_slots();
+    }, 5);
+    intervals.push(i);
+}
+
+function scroll_left()
+{
+    var i = setInterval(function() 
+    {
+        slot_offest += 10;
+        update_slots();
+    }, 5);
+    intervals.push(i);
+}
+
+function stop_scroll()
+{
+    for (var i = 0; i < intervals.length; i++)
+        clearInterval(intervals[i]);
+    intervals = [];
+}
+
+function find_slot()
+{
+    for (var i = 0; i < slots.length; i++)
+        if (slots[i] == null)
+            return i;
+    return slots.length;
+}
+
+function create_group(x, y, width)
 {
     var group = document.createElement("div");
     group.className = "group";
-    group.style.left = (x-10) + "px";
-    group.style.top = (y-10) + "px";
+    group.style.left = (x-13) + "px";
+    group.style.top = (y-13) + "px";
     group.style.width = (width+80) + "px";
-    group.style.backgroundColor = valid ? "green" : "red";
     document.body.appendChild(group);
     html_groups.push(group);
 }
@@ -64,22 +117,28 @@ function dist(p0x, p0y, p1x, p1y)
     return Math.sqrt(a*a + b*b);
 }
 
-function update_tile()
-{
-    curr_tile.style.left = curr_tile.px + "px";
-    curr_tile.style.top = curr_tile.py + "px";
-}
-
 function snap_pos(x, y)
 {
     if (dist(x, y, curr_tile.px, curr_tile.py) <= 20)
     {
         curr_tile.px = x;
         curr_tile.py = y;
-        update_tile();
         return true;
     }
     return false;
+}
+
+function clear_tile()
+{
+    for (var i = 0; i < slots.length; i++)
+        if (slots[i] == curr_tile)
+            slots[i] = null;
+}
+
+function update_tile(tile)
+{
+    tile.style.left = tile.px + "px";
+    tile.style.top = tile.py + "px";
 }
 
 function drag(event, tile)
@@ -88,16 +147,46 @@ function drag(event, tile)
 	{
         curr_tile.px = event.clientX-40;
         curr_tile.py = event.clientY-50;
-        update_tile();
+        clear_tile();
         
-        var slot = Math.round((curr_tile.px - 10) / 80);
-        var px = slot * 80 + 10;
-        
-        
-        if (!snap_pos(px, 10) && curr_tile.py > 100)
+        if (curr_tile.py <= 100)
+        {
+            var slot = Math.round((curr_tile.px - slot_offest) / 80);
+            var px = slot * 80 + slot_offest;
+            if (slots[slot] == null)
+            {
+                curr_tile.px = px;
+                curr_tile.py = 10;
+                slots[slot] = curr_tile;
+            }
+        }
+        else
+        {
             snap_tiles();
+        }
+        
         update_groups();
+        update_tile(curr_tile);
+        update_slot_scroll();
+        update_next_button();
 	}
+}
+
+function update_slot_scroll()
+{
+    var left = document.getElementById("left");
+    var right = document.getElementById("right");
+    
+    var last = slots.length;
+    if (last * 80 + slot_offest > window.innerWidth)
+        right.style.display = "block";
+    else
+        right.style.display = "none";
+    
+    if (slot_offest < 10)
+        left.style.display = "block";
+    else
+        left.style.display = "none";
 }
 
 function snap_tiles()
@@ -167,7 +256,7 @@ function update_groups()
 	for (var i = 0; i < tiles.length; i++)
 	{
 		var tile = tiles[i];
-		if (in_group.indexOf(tile) == -1)
+		if (in_group.indexOf(tile) == -1 && tile.py > 100)
 		{
 			var group = [tile];
 			if (tile.left != null)
@@ -176,21 +265,41 @@ function update_groups()
 				group = group.concat(scan_right(tile.right));
 
 			in_group.push(tile);
-			if (group.length > 1)
-				groups.push(group);
+            groups.push(group);
 		}
 	}
 	
 	for (var i = 0; i < groups.length; i++)
 	{
 		var group = groups[i];
-		var first = group[0];
-		var last = group[group.length-1];
-		var valid = is_group_valid(group);
-		create_group(first.px, first.py, last.px - first.px, valid);
+        var valid = is_group_valid(group);
+        
+        if (!valid)
+        {
+            var first = group[0];
+            var last = group[group.length-1];
+            create_group(first.px, first.py, last.px - first.px, valid);
+        }
 	}
 }
 
+function scan_left(tile)
+{
+	in_group.push(tile);
+	if (tile.left != null)
+		return scan_left(tile.left).concat([tile]);
+	return [tile];
+}
+
+function scan_right(tile)
+{
+	in_group.push(tile);
+	if (tile.right != null)
+		return [tile].concat(scan_right(tile.right));
+	return [tile];
+}
+
+// It's very messy, but it works I guess
 function is_group_valid(group)
 {
 	if (group.length <= 2)
@@ -234,24 +343,76 @@ function is_group_valid(group)
 	return (follow_num && same_colour) || (same_number && diffrent_colours);
 }
 
-function scan_left(tile)
-{
-	in_group.push(tile);
-	if (tile.left != null)
-		return scan_left(tile.left).concat([tile]);
-	return [tile];
-}
-
-function scan_right(tile)
-{
-	in_group.push(tile);
-	if (tile.right != null)
-		return [tile].concat(scan_right(tile.right));
-	return [tile];
-}
-
 function end_drag()
 {
-	curr_tile = null;
+    if (curr_tile != null)
+    {
+        if (curr_tile.py <= 100 && slots.indexOf(curr_tile) == -1)
+        {
+            var slot = find_slot();
+            curr_tile.px = slot * 80 + slot_offest;
+            curr_tile.py = 10;
+            slots[slot] = curr_tile;
+            update_tile(curr_tile);
+        }
+        curr_tile = null;
+    }
 }
 
+function does_match(a, b)
+{
+    if (a.length != b.length)
+        return false;
+    
+    for (var i = 0; i < a.length; i++)
+        if (a[i] != b[i])
+            return false;
+    
+    return true;
+}
+
+function update_next_button()
+{
+    var diffrent = false;
+    var all_valid = true;
+    for (var i = 0; i < groups.length; i++)
+    {
+        var group = groups[i];
+        var has_match = false;
+        for (var j = 0; j < last_board.length; j++)
+        {
+            var other = last_board[j];
+            if (does_match(group, other))
+            {
+                has_match = true;
+                break;
+            }
+        }
+        
+        if (!has_match)
+            diffrent = true;
+        if (!is_group_valid(group))
+            all_valid = false;
+    }
+    
+    var button = document.getElementById("next");
+    if (diffrent && all_valid)
+    {
+        button.style.backgroundColor = "green";
+        button.innerHTML = "Finish";
+    }
+    else
+    {
+        button.style.backgroundColor = "red";
+        button.innerHTML = "Pickup";
+    }
+}
+
+function next_turn(button)
+{
+    if (button.innerHTML == "Pickup")
+    {
+        create_tile();
+        update_slot_scroll();
+    }
+}
