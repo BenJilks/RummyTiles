@@ -1,20 +1,20 @@
 <!DOCTYPE html>
 
-    <head>
-        <title>RummyTile</title>
-        <script src="login.js"></script>
-    </head>
+	<head>
+		<title>RummyTile</title>
+		<script src="login.js"></script>
+	</head>
     
-    <body>
+	<body>
         <h1>RummyTile</h1>
-        <form action="/join" method="POST">
-            <input type="text" name="code"/>
-            <button type="submit">Join</button>
-        </form>
+		<form action="/game" method="POST">
+			<input type="text" name="code"/>
+			<button type="submit">Join</button>
+		</form>
         
-        <br>
-        <p>Game code: {{ code }}</p>
-        <button onclick="start()">Start Game</button>
-    </body>
+		<br>
+		<p>Game code: {{ code }}</p>
+	</body>
 
 </html>
+

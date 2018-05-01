@@ -1,6 +1,5 @@
 
 var curr_tile = null;
-var colours = ["red", "blue", "orange", "green"];
 var tiles = [];
 var in_group = [];
 var groups = [];
@@ -10,7 +9,40 @@ var slot_offest = 10;
 var intervals = [];
 var last_board = [];
 
-function create_tile()
+function get(url)
+{
+	var xmlHttp = new XMLHttpRequest();
+	xmlHttp.open("GET", url, false);
+	xmlHttp.send(null);
+	return xmlHttp.responseText;
+}
+
+function post(url, data)
+{
+	var str = "";
+	for (var i = 0; i < data.length; i++)
+		str += data[i][0] + "=" + data[i][1] + 
+			(i == data.length-1 ? "" : "&");
+
+	var xmlHttp = new XMLHttpRequest();
+	xmlHttp.open("POST", url, false);
+	xmlHttp.send(str);
+	return xmlHttp.responseText;
+}
+
+function init()
+{
+	var tile_json = get("/tiles");
+	var tile_data = JSON.parse(tile_json);
+	for (var i = 0; i < tile_data.length; i++)
+	{
+		var tile = tile_data[i];
+		create_tile(tile.id, tile.number, 
+			tile.colour);
+	}
+}
+
+function create_tile(id, number, colour)
 {
 	var tile = document.createElement("div");
     var slot = find_slot();
@@ -23,8 +55,9 @@ function create_tile()
 	tile.py = 10;
 	tile.left = null;
 	tile.right = null;
-	tile.number = Math.floor(Math.random() * 13)+1;
-	tile.colour = colours[Math.floor(Math.random() * colours.length)];
+	tile.id = id;
+	tile.number = number;
+	tile.colour = colour;
 	
 	var number = document.createElement("text");
 	number.style = "color:" + tile.colour;
@@ -343,19 +376,22 @@ function is_group_valid(group)
 	return (follow_num && same_colour) || (same_number && diffrent_colours);
 }
 
+function replace_tile(tile)
+{
+	var slot = find_slot();
+    tile.px = slot * 80 + slot_offest;
+    tile.py = 10;
+    slots[slot] = tile;
+    update_tile(tile);
+    update_slot_scroll();
+}
+
 function end_drag()
 {
     if (curr_tile != null)
     {
         if (curr_tile.py <= 100 && slots.indexOf(curr_tile) == -1)
-        {
-            var slot = find_slot();
-            curr_tile.px = slot * 80 + slot_offest;
-            curr_tile.py = 10;
-            slots[slot] = curr_tile;
-            update_tile(curr_tile);
-            update_slot_scroll();
-        }
+        	replace_tile(curr_tile);
         curr_tile = null;
     }
 }
@@ -411,9 +447,37 @@ function update_next_button()
 
 function next_turn(button)
 {
-    if (button.innerHTML == "Pickup")
-    {
-        create_tile();
-        update_slot_scroll();
-    }
+	if (button.innerHTML == "Pickup")
+	{
+		var data = [];
+		for (var i = 0; i < tiles.length; i++)
+		{
+			var tile = tiles[i];
+			if (tile.py > 100)
+			{
+				var info = tile.px + "," + tile.py + ",";
+				info += (tile.left == null ? "null" : tile.left.id) + ",";
+				info += tile.right == null ? "null" : tile.right.id;
+				data.push([tile.id, info]);
+			}
+		}
+		
+		var response = post("/next", data);
+		if (response != "ok")
+		{
+			var tile = JSON.parse(response);
+			create_tile(tile.id, tile.number, tile.colour);
+			
+			for (var i = 0; i < last_board.length; i++)
+			{
+				var group = last_board[i];
+				for (var j = 0; j < group.length; j++)
+				{
+					
+				}
+			}
+		}
+		else
+			last_board = groups;
+	}
 }
