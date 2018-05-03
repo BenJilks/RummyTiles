@@ -51,8 +51,13 @@ function init()
             create_tile(tile.id, tile.number, 
                 tile.colour);
         }
-        finish_board();
-        update_slot_scroll();
+        
+        get("/board", function(board_data)
+		{
+			sync_board(board_data);
+			finish_board();
+        	update_slot_scroll();
+		});
     });
     
     get("/turn", function(data)
@@ -70,9 +75,14 @@ function check_updates()
     {
         get("/update", function(data)
         {
-            console.log(data);
             if (data != "false")
             {
+            	if (data == "no game")
+            	{
+            		window.location.href = "/";
+            		return;
+            	}
+            
                 my_turn = true;
                 sync_board(data);
                 var next = document.getElementById("next");
@@ -108,12 +118,18 @@ function sync_board(data)
     {
         var state = board[i];
         var tile = find_sync_tile(state.tile);
+        clear_tile(tile);
         tile.px = state.px;
         tile.py = state.py;
         if (state.left != null)
             tile.left = find_sync_tile(find_tile_info(board, state.left));
+        else
+        	tile.left = null;
+        
         if (state.right != null)
             tile.right = find_sync_tile(find_tile_info(board, state.right));
+        else
+        	tile.right = null;
         update_tile(tile);
     }
     update_groups();

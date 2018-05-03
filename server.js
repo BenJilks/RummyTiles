@@ -43,7 +43,6 @@ function handle_post(request, response, user)
         if (request.url == "/game")
         {
         	var code = data[0][1];
-            console.log(code);
         	var game = find_game_by_code(code);
         	if (game != null)
         	{
@@ -56,9 +55,12 @@ function handle_post(request, response, user)
         			game.local_tiles[game.host] = [];
         			game.local_tiles[game.player] = [];
                     game.board = [];
-					create_tiles(game, game.host, 7);
-        			create_tiles(game, game.player, 7);
+                    game.tile_index = 0;
+                    create_tiles(game);
+					allocate_tiles(game, game.host, 7);
+        			allocate_tiles(game, game.player, 7);
                     game.turn = game.player;
+                    clean_player_game(user);
         		}
         	}
         }
@@ -66,23 +68,52 @@ function handle_post(request, response, user)
     });
 }
 
-function create_tiles(game, user, num)
+function clean_player_game(player)
+{
+	for (var i = 0; i < games.length; i++)
+		if (games[i].host == player)
+			games.splice(i, 1);
+}
+
+function shuffle(array) 
+{
+    for (var i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
+}
+
+function create_tiles(game)
+{
+	for (var i = 0; i < colours.length; i++)
+	{
+		var colour = colours[i];
+		for (var num = 1; num < 14; num++)
+		{
+			var id = Math.floor(Math.random() * 99999);
+			var tile = {id: id, number: num, colour: colour};
+        	game.tiles.push(tile);
+		}
+	}
+	game.tiles = shuffle(game.tiles);
+}
+
+function allocate_tiles(game, user, num)
 {
 	var local_tiles = game.local_tiles[user];
 	for (var i = 0; i < num; i++)
 	{
-		var number = Math.floor(Math.random() * 13)+1;
-		var colour = colours[Math.floor(Math.random() * colours.length)];
-		var id = Math.floor(Math.random() * 99999);
-		var tile = {id: id, number: number, colour: colour};
-		local_tiles.push(tile);
-        game.tiles.push(tile);
+		if (game.tile_index < game.tiles.length)
+		{
+			var tile = game.tiles[game.tile_index++];
+			local_tiles.push(tile);
+		}
 	}
 }
 
 function connection(request, response)
 {
-    console.log("url=" + request.url + ", method=" + request.method);
     var user = request.connection.remoteAddress;
     if (request.method == "POST")
 		handle_post(request, response, user);
@@ -101,8 +132,19 @@ function handle_request(request, response, user, data=[])
 		case "/next": req_next(response, user, data); break;
         case "/turn": req_turn(response, user); break;
         case "/update": req_update(response, user); break;
+        case "/board": req_board(response, user); break;
         default: send_file("." + url, response); break;
     }
+}
+
+function req_board(response, user)
+{
+	var game = find_game(user);
+	if (game != null)
+		if (game.player != null)
+			write_json(response, game.board);
+	else
+		write_text(response, "no game");
 }
 
 function req_update(response, user)
@@ -113,11 +155,13 @@ function req_update(response, user)
         if (game.turn != user)
         {
             write_text(response, "false");
-            return;
+			return;
         }
         
         write_json(response, game.board);
     }
+    else
+    	write_text(response, "no game");
 }
 
 function req_turn(response, user)
@@ -125,6 +169,8 @@ function req_turn(response, user)
     var game = find_game(user);
     if (game != null)
         write_text(response, (game.turn == user).toString());
+    else
+    	write_text(response, "no game");
 }
 
 function write_json(response, data)
@@ -143,13 +189,14 @@ function req_tiles(response, user)
 	var game = find_game(user);
 	if (game != null)
 	{
-        console.log(game);
         if (game.player != null)
         {
             var tiles = game.local_tiles[user];
             write_json(response, tiles);
+            return;
         }
 	}
+	write_text(response, "false");
 }
 
 function write_text(response, text)
@@ -279,9 +326,29 @@ function is_group_valid(group)
     return (same_number && diffrent_colours) || (same_colour && counts_up);
 }
 
-function is_valid(game, data)
+function same_board(game, board)
 {
-    var board = decode_tiles(game, data);
+	for (var i = 0; i < board.length; i++)
+	{
+		var state = board[i];
+		var tile = state.tile;
+		for (var j = 0; j < game.board.length; j++)
+		{
+			var other = game.board[j];
+			if (other.tile.id == tile.id)
+				if (other.left != state.left || 
+					other.right != state.right)
+					return false;
+		}
+	}
+	return true;
+}
+
+function is_valid(game, board)
+{
+	if (same_board(game, board))
+		return false;
+
     var groups = group_tiles(board);
     for (var i = 0; i < groups.length; i++)
     {
@@ -297,16 +364,17 @@ function req_next(response, user, data)
 	var game = find_game(user);
 	if (game != null)
 	{
-        var valid = is_valid(game, data);
+		var board = decode_tiles(game, data);
+        var valid = is_valid(game, board);
         if (valid)
         {
             write_text(response, "ok");
-            game.board = decode_tiles(game, data);
+            game.board = board;
         }
         else
         {
             var tiles = game.local_tiles[user];
-            create_tiles(game, user, 1);
+            allocate_tiles(game, user, 1);
             write_json(response, tiles[tiles.length-1]);
         }
         
