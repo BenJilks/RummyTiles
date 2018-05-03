@@ -8,16 +8,22 @@ var slots = [];
 var slot_offest = 10;
 var intervals = [];
 var last_board = [];
+var last_state = [];
+var my_turn = false;
 
-function get(url)
+function get(url, response)
 {
 	var xmlHttp = new XMLHttpRequest();
-	xmlHttp.open("GET", url, false);
+    xmlHttp.onreadystatechange = function() 
+    { 
+        if (xmlHttp.readyState == 4 && xmlHttp.status == 200)
+            response(xmlHttp.responseText);
+    };
+	xmlHttp.open("GET", url, true);
 	xmlHttp.send(null);
-	return xmlHttp.responseText;
 }
 
-function post(url, data)
+function post(url, data, response)
 {
 	var str = "";
 	for (var i = 0; i < data.length; i++)
@@ -25,21 +31,93 @@ function post(url, data)
 			(i == data.length-1 ? "" : "&");
 
 	var xmlHttp = new XMLHttpRequest();
-	xmlHttp.open("POST", url, false);
+    xmlHttp.onreadystatechange = function()
+    {
+        if (xmlHttp.readyState == 4 && xmlHttp.status == 200)
+            response(xmlHttp.responseText);
+    };
+	xmlHttp.open("POST", url, true);
 	xmlHttp.send(str);
-	return xmlHttp.responseText;
 }
 
 function init()
 {
-	var tile_json = get("/tiles");
-	var tile_data = JSON.parse(tile_json);
-	for (var i = 0; i < tile_data.length; i++)
-	{
-		var tile = tile_data[i];
-		create_tile(tile.id, tile.number, 
-			tile.colour);
-	}
+    get("/tiles", function(tile_json)
+    {
+        var tile_data = JSON.parse(tile_json);
+        for (var i = 0; i < tile_data.length; i++)
+        {
+            var tile = tile_data[i];
+            create_tile(tile.id, tile.number, 
+                tile.colour);
+        }
+        finish_board();
+        update_slot_scroll();
+    });
+    
+    get("/turn", function(data)
+    {
+        my_turn = data == "true" ? true : false;
+        var next = document.getElementById("next");
+        next.style.display = my_turn ? "block" : "none";
+        setInterval(check_updates, 500);
+    });
+}
+
+function check_updates()
+{
+    if (!my_turn)
+    {
+        get("/update", function(data)
+        {
+            console.log(data);
+            if (data != "false")
+            {
+                my_turn = true;
+                sync_board(data);
+                var next = document.getElementById("next");
+                next.style.display = my_turn ? "block" : "none";
+            }
+        });
+    }
+}
+
+function find_sync_tile(info)
+{
+    for (var i = 0; i < tiles.length; i++)
+        if (tiles[i].id == info.id)
+            return tiles[i];
+    
+    var tile = create_tile(info.id, info.number, info.colour);
+    clear_tile(tile);
+    return tile;
+}
+
+function find_tile_info(board, id)
+{
+    for (var i = 0; i < board.length; i++)
+        if (board[i].tile.id == id)
+            return board[i].tile;
+    return null;
+}
+
+function sync_board(data)
+{
+    var board = JSON.parse(data);
+    for (var i = 0; i < board.length; i++)
+    {
+        var state = board[i];
+        var tile = find_sync_tile(state.tile);
+        tile.px = state.px;
+        tile.py = state.py;
+        if (state.left != null)
+            tile.left = find_sync_tile(find_tile_info(board, state.left));
+        if (state.right != null)
+            tile.right = find_sync_tile(find_tile_info(board, state.right));
+        update_tile(tile);
+    }
+    update_groups();
+    finish_board();
 }
 
 function create_tile(id, number, colour)
@@ -66,6 +144,7 @@ function create_tile(id, number, colour)
 	document.body.appendChild(tile);
     tiles.push(tile);
     slots[slot] = tile;
+    return tile;
 }
 
 function update_slots()
@@ -140,7 +219,8 @@ function clear_groups()
 
 function start_drag(tile)
 {
-	curr_tile = tile;
+    if (my_turn)
+        curr_tile = tile;
 }
 
 function dist(p0x, p0y, p1x, p1y)
@@ -161,10 +241,10 @@ function snap_pos(x, y)
     return false;
 }
 
-function clear_tile()
+function clear_tile(tile)
 {
     for (var i = 0; i < slots.length; i++)
-        if (slots[i] == curr_tile)
+        if (slots[i] == tile)
             slots[i] = null;
 }
 
@@ -180,7 +260,7 @@ function drag(event, tile)
 	{
         curr_tile.px = event.clientX-40;
         curr_tile.py = event.clientY-50;
-        clear_tile();
+        clear_tile(curr_tile);
         
         if (curr_tile.py <= 100)
         {
@@ -445,39 +525,96 @@ function update_next_button()
     }
 }
 
+function send_board_data(response)
+{
+    var data = [];
+    for (var i = 0; i < tiles.length; i++)
+    {
+        var tile = tiles[i];
+        if (tile.py > 100)
+        {
+            var info = tile.px + "," + tile.py + ",";
+            info += (tile.left == null ? "null" : tile.left.id) + ",";
+            info += tile.right == null ? "null" : tile.right.id;
+            data.push([tile.id, info]);
+        }
+    }
+    
+    post("/next", data, response);
+}
+
+function get_last_state(tile)
+{
+    for (var i = 0; i < last_state.length; i++)
+    {
+        var state = last_state[i];
+        if (state.id == tile.id)
+            return state;
+    }
+    
+    return null;
+}
+
+function restore_board(response)
+{
+    for (var i = 0; i < tiles.length; i++)
+    {
+        var tile = tiles[i];
+        var state = get_last_state(tile);
+        if (state == null && tile.py > 100)
+        {
+            var slot = find_slot();
+            var px = slot * 80 + slot_offest;
+            var py = 10;
+            slots[slot] = tile;
+            state = {px: px, py: py, left: null, right: null};
+        }
+        
+        if (state != null)
+        {
+            tile.px = state.px;
+            tile.py = state.py;
+            tile.left = state.left;
+            tile.right = state.right;
+            update_tile(tile);
+        }
+    }
+    
+    var tile = JSON.parse(response);
+    create_tile(tile.id, tile.number, tile.colour);
+    
+    update_groups();
+    update_slot_scroll();
+}
+
+function finish_board()
+{
+    last_board = groups;
+    last_state = [];
+    for (var i = 0; i < tiles.length; i++)
+    {
+        var tile = tiles[i];
+        if (tile.py > 100)
+        {
+            var state = {id: tile.id, px: tile.px, py: tile.py, 
+                left: tile.left, right: tile.right};
+            last_state.push(state);
+        }
+    }
+}
+
 function next_turn(button)
 {
-	if (button.innerHTML == "Pickup")
-	{
-		var data = [];
-		for (var i = 0; i < tiles.length; i++)
-		{
-			var tile = tiles[i];
-			if (tile.py > 100)
-			{
-				var info = tile.px + "," + tile.py + ",";
-				info += (tile.left == null ? "null" : tile.left.id) + ",";
-				info += tile.right == null ? "null" : tile.right.id;
-				data.push([tile.id, info]);
-			}
-		}
-		
-		var response = post("/next", data);
-		if (response != "ok")
-		{
-			var tile = JSON.parse(response);
-			create_tile(tile.id, tile.number, tile.colour);
-			
-			for (var i = 0; i < last_board.length; i++)
-			{
-				var group = last_board[i];
-				for (var j = 0; j < group.length; j++)
-				{
-					
-				}
-			}
-		}
-		else
-			last_board = groups;
-	}
+    send_board_data(function(response)
+    {
+        console.log(response);
+        if (response == "ok")
+            finish_board();
+        else
+            restore_board(response);
+    });
+    
+    my_turn = !my_turn;
+    var next = document.getElementById("next");
+    next.style.display = my_turn ? "block" : "none";
 }
